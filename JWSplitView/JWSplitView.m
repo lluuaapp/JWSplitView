@@ -22,6 +22,7 @@
 #import "JWSplitView.h"
 #import <objc/runtime.h>
 
+
 #if __has_feature(objc_arc)
 #define JWRELEASE(someObject)
 #define JWPROPERTYSTRONG strong
@@ -29,6 +30,9 @@
 #define JWRELEASE(someObject) [someObject release]
 #define JWPROPERTYSTRONG retain
 #endif
+
+
+NSString * const JWSplitViewDidResizeNotification = @"JWSplitViewDidResizeNotification";
 
 @class JWDividerView;
 
@@ -70,9 +74,12 @@
 @synthesize dividerThickness=_dividerThickness;
 @synthesize dividerStyle=_dividerStyle;
 @synthesize autosaveName=_autosaveName;
+@synthesize delegate=_delegate;
 
 - (void)dealloc
 {
+    _delegate = nil;
+    
     [_splitViews release];
     [_dividers release];
     [_dividerConstraints release];
@@ -229,6 +236,7 @@
     BOOL horizontal = self.horizontal;
     CGFloat originalConstant = divider.constraint.constant;
     
+    __block JWSplitView *me = self;
     self.dragHandler = ^(NSEvent *event, JWDividerView *currentDivider, id sender) {
         NSPoint mouseCurrentPoint = [event locationInWindow];
         
@@ -236,7 +244,15 @@
         CGFloat deltaX = ceil(mouseDownPoint.x - mouseCurrentPoint.x);
         
         CGFloat newConstant = originalConstant - (horizontal ? deltaX : deltaY);
+        CGFloat minimum = [me.delegate respondsToSelector:@selector(splitView:constrainMinCoordinate:ofSubviewAt:)] ? [me.delegate splitView:me constrainMinCoordinate:newConstant ofSubviewAt:[me.dividers indexOfObject:currentDivider] - 1] : -1;
+        CGFloat maximum = [me.delegate respondsToSelector:@selector(splitView:constrainMinCoordinate:ofSubviewAt:)] ? [me.delegate splitView:me constrainMaxCoordinate:newConstant ofSubviewAt:[me.dividers indexOfObject:currentDivider] - 1] : -1;
+        
         currentDivider.constraint.constant = newConstant;
+        
+        if (maximum != -1 && newConstant > maximum) currentDivider.constraint.constant = maximum;
+        else if (maximum != -1 && newConstant < minimum) currentDivider.constraint.constant = minimum;
+        
+        [[NSNotificationCenter defaultCenter] postNotificationName:JWSplitViewDidResizeNotification object:me];
     };
 }
 
@@ -289,6 +305,20 @@
     NSData *data = [NSKeyedArchiver archivedDataWithRootObject:constants];
     
     [[NSUserDefaults standardUserDefaults] setObject:data forKey:self.autosaveName];
+}
+
+- (NSArray *)splitterPositions
+{
+    NSMutableArray *array = [NSMutableArray array];
+    for (NSLayoutConstraint *constraint in self.dividerConstraints) [array addObject:@(constraint.constant)];
+    
+    return array;
+}
+
+- (void)setSplitterPositions:(NSArray *)splitterPositions
+{
+    NSInteger limit = splitterPositions.count;
+    for (NSInteger i = 0; i < limit; i++) [[self.dividerConstraints objectAtIndex:i] setConstant:[[splitterPositions objectAtIndex:i] doubleValue]];
 }
 
 @end
@@ -371,7 +401,6 @@
 @implementation NSView (LayoutExtensions)
 
 static char NSViewLayoutPriorityKey;
-static char NSViewLayoutConstraintKey;
 
 - (void)setPriority:(NSLayoutPriority)priority {
     NSAssert(priority > NSLayoutPriorityDragThatCanResizeWindow, @"Split view layout priority cannot exceed NSLayoutPriorityDragThatCannotResizeWindow");

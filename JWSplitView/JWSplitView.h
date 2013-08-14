@@ -31,6 +31,7 @@ enum {
 typedef NSInteger JWSplitViewDividerStyle;
 
 @class JWDividerView;
+@protocol JWSplitViewDelegate;
 
 typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *divider, id sender);
 
@@ -46,25 +47,24 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
     CGFloat                         _dividerThickness;
     JWSplitViewDividerStyle         _dividerStyle;
     NSString                        *_autosaveName;
+    id<JWSplitViewDelegate>         _delegate;
 }
 #endif
 
-//- (void)setView:(NSView *)view forSplitView:(NSUInteger)splitView;
 - (void)addSplitView:(NSView *)view;
 - (NSView *)splitViewAtIndex:(NSUInteger)index;
 - (JWDividerView *)dividerAtSplitViewIndex:(NSUInteger)index;
 
+#if __has_feature(objc_arc)
+@property (nonatomic, weak) id <JWSplitViewDelegate> delegate;
+#else
+@property (nonatomic, assign) id <JWSplitViewDelegate> delegate;
+#endif
+@property (nonatomic, copy) NSArray *splitterPositions;
 @property (nonatomic, readwrite) CGFloat dividerThickness;
-//@property (nonatomic, copy) TUIViewDrawRect dividerDrawRectBlock;
-
 @property (nonatomic, getter = isHorizontal) BOOL horizontal;
-
 @property (nonatomic, assign) JWSplitViewDividerStyle dividerStyle;
-
 @property (nonatomic, copy) NSString *autosaveName;
-
-//- (NSLayoutPriority)holdingPriorityForSubviewAtIndex:(NSInteger)subviewIndex;
-//- (void)setHoldingPriority:(NSLayoutPriority)priority forSubviewAtIndex:(NSInteger)subviewIndex;
 
 @end
 
@@ -81,3 +81,13 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
 @property (nonatomic, assign, readonly) NSLayoutConstraint *constraint;
 
 @end
+
+@protocol JWSplitViewDelegate <NSObject>
+@optional
+
+- (CGFloat)splitView:(JWSplitView *)splitView constrainMinCoordinate:(CGFloat)proposedMaximumPosition ofSubviewAt:(NSInteger)index;
+- (CGFloat)splitView:(JWSplitView *)splitView constrainMaxCoordinate:(CGFloat)proposedMaximumPosition ofSubviewAt:(NSInteger)index;
+
+@end
+
+extern NSString * const JWSplitViewDidResizeNotification;
