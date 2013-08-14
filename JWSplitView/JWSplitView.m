@@ -22,19 +22,26 @@
 #import "JWSplitView.h"
 #import <objc/runtime.h>
 
+#if __has_feature(objc_arc)
+#define JWRELEASE(someObject)
+#define JWPROPERTYSTRONG strong
+#else
+#define JWRELEASE(someObject) [someObject release]
+#define JWPROPERTYSTRONG retain
+#endif
+
 @class JWDividerView;
-typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *divider, id sender);
 
 @interface JWSplitView()
-@property (nonatomic, strong) NSMutableArray *splitViews;
-@property (nonatomic, strong) NSMutableArray *dividers;
-@property (nonatomic, strong) NSMutableArray *dividerConstraints;
-@property (nonatomic, strong) NSArray *restoredConstants;
+@property (nonatomic, JWPROPERTYSTRONG) NSMutableArray *splitViews;
+@property (nonatomic, JWPROPERTYSTRONG) NSMutableArray *dividers;
+@property (nonatomic, JWPROPERTYSTRONG) NSMutableArray *dividerConstraints;
+@property (nonatomic, JWPROPERTYSTRONG) NSArray *restoredConstants;
 @property (nonatomic, copy) JWSplitViewDraggingHandler dragHandler;
 @end
 
 @interface JWDividerView()
-@property (nonatomic, strong) NSTrackingArea *trackingArea;
+@property (nonatomic, JWPROPERTYSTRONG) NSTrackingArea *trackingArea;
 @property (nonatomic, assign) JWSplitViewDividerStyle dividerStyle;
 @property (nonatomic, assign) BOOL horizontal;
 @property (nonatomic, assign, readwrite) NSLayoutConstraint *constraint;
@@ -53,7 +60,31 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
 
 @implementation JWSplitView
 
-- (id)initWithFrame:(CGRect)frame {
+#if !__has_feature(objc_arc)
+@synthesize horizontal=_horizontal;
+@synthesize splitViews=_splitViews;
+@synthesize dividers=_dividers;
+@synthesize dividerConstraints=_dividerConstraints;
+@synthesize restoredConstants=_restoredConstants;
+@synthesize dragHandler=_dragHandler;
+@synthesize dividerThickness=_dividerThickness;
+@synthesize dividerStyle=_dividerStyle;
+@synthesize autosaveName=_autosaveName;
+
+- (void)dealloc
+{
+    [_splitViews release];
+    [_dividers release];
+    [_dividerConstraints release];
+    [_restoredConstants release];
+    [_dragHandler release];
+    [_autosaveName release];
+    
+    [super dealloc];
+}
+#endif
+
+- (id)initWithFrame:(NSRect)frame {
     if ((self = [super initWithFrame:frame])) {
         self.splitViews = [NSMutableArray array];
         self.dividers = [NSMutableArray array];
@@ -92,22 +123,23 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
 }
 
 - (void)addDivider {
-    JWDividerView *divider = [[JWDividerView alloc] initWithFrame:CGRectZero];
+    JWDividerView *divider = [[JWDividerView alloc] initWithFrame:NSZeroRect];
     [divider setTranslatesAutoresizingMaskIntoConstraints:NO];
     divider.horizontal = self.horizontal;
     divider.dividerStyle = self.dividerStyle;
     [self.dividers addObject:divider];
     [self addSubview:divider];
+    JWRELEASE(divider);
     
     [self resetDividerLayout];
 }
 
 - (NSView *)splitViewAtIndex:(NSUInteger)index {
-    return self.splitViews[index];
+    return [self.splitViews objectAtIndex:index];
 }
 
 - (JWDividerView *)dividerAtSplitViewIndex:(NSUInteger)index {
-    return self.dividers[index + 1];
+    return [self.dividers objectAtIndex:index + 1];
 }
 
 
@@ -127,7 +159,7 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
     
     [self.dividers enumerateObjectsUsingBlock:^(id div, NSUInteger idx, BOOL *stop) {
         BOOL last = ([div isEqual:self.dividers.lastObject]);
-        BOOL first = ([div isEqual:self.dividers[0]]);
+        BOOL first = ([div isEqual:[self.dividers objectAtIndex:0]]);
         BOOL h = self.horizontal;
         
         NSDictionary *views = NSDictionaryOfVariableBindings(div);
@@ -154,7 +186,7 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
             [div setConstraint:constraint]; // divider weakly stores a reference to this constraint so we can modify it later
             
             if ([self shouldRestorePositions]) {
-                constraint.constant = [self.restoredConstants[[self.dividerConstraints indexOfObject:constraint]] floatValue];
+                constraint.constant = [[self.restoredConstants objectAtIndex:[self.dividerConstraints indexOfObject:constraint]] floatValue];
             }
         }
         
@@ -176,9 +208,9 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
     BOOL h = self.horizontal;
     
     [self.splitViews enumerateObjectsUsingBlock:^(NSView *currentView, NSUInteger idx, BOOL *stop) {
-        views[@"current"] = currentView;
-        views[@"prevDiv"] = self.dividers[idx];
-        views[@"nextDiv"] = self.dividers[idx + 1];
+        [views setObject:currentView forKey:@"current"];
+        [views setObject:[self.dividers objectAtIndex:idx] forKey:@"prevDiv"];
+        [views setObject:[self.dividers objectAtIndex:idx + 1] forKey:@"nextDiv"];
         
         [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:h ? @"H:[prevDiv][current(>=0@600)][nextDiv]" : @"V:[prevDiv][current(>=0)][nextDiv]"
                                                                                  options:0 metrics:0 views:views]];
@@ -186,6 +218,9 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
                                                                                  options:0 metrics:0 views:views]];
     }];
     [self addConstraints:constraints];
+    
+    JWRELEASE(views);
+    JWRELEASE(constraints);
 }
 
 - (void)mouseDownOnDivider:(JWDividerView *)divider withEvent:(NSEvent *)downEvent {
@@ -195,7 +230,7 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
     CGFloat originalConstant = divider.constraint.constant;
     
     self.dragHandler = ^(NSEvent *event, JWDividerView *currentDivider, id sender) {
-        CGPoint mouseCurrentPoint = [event locationInWindow];
+        NSPoint mouseCurrentPoint = [event locationInWindow];
         
         CGFloat deltaY = ceil(mouseCurrentPoint.y - mouseDownPoint.y);
         CGFloat deltaX = ceil(mouseDownPoint.x - mouseCurrentPoint.x);
@@ -224,9 +259,13 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
     return (self.autosaveName != nil && self.restoredConstants.count > 0);
 }
 
-- (void)setAutosaveName:(NSString *)autosaveName {
-    _autosaveName = [autosaveName copy];
-    [self restorePositionsWithAutosaveName:autosaveName];
+- (void)setAutosaveName:(NSString *)inAutosaveName {
+    if (_autosaveName != inAutosaveName)
+    {
+        JWRELEASE(_autosaveName);
+        _autosaveName = [inAutosaveName copy];
+        [self restorePositionsWithAutosaveName:inAutosaveName];
+    }
 }
 
 - (void)restorePositionsWithAutosaveName:(NSString *)autosave {
@@ -257,6 +296,21 @@ typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *di
 
 
 @implementation JWDividerView
+
+#if !__has_feature(objc_arc)
+@synthesize trackingArea=_trackingArea;
+@synthesize dividerStyle=_dividerStyle;
+@synthesize horizontal=_horizontal;
+@synthesize constraint=_constraint;
+
+- (void)dealloc
+{
+    _constraint = nil;
+    [_trackingArea release];
+
+    [super dealloc];
+}
+#endif
 
 - (void)mouseDown:(NSEvent *)theEvent {
     [self.superview mouseDownOnDivider:self withEvent:theEvent];

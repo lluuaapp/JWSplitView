@@ -21,13 +21,33 @@
 
 #import <Cocoa/Cocoa.h>
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
 enum {
     JWSplitViewDividerStyleThin = 1,
 };
 typedef NSInteger JWSplitViewDividerStyle;
 
 @class JWDividerView;
+
+typedef void (^JWSplitViewDraggingHandler)(NSEvent *dragEvent, JWDividerView *divider, id sender);
+
 @interface JWSplitView : NSView
+#if !__has_feature(objc_arc)
+{
+    BOOL                            _horizontal;
+    NSMutableArray                  *_splitViews;
+    NSMutableArray                  *_dividers;
+    NSMutableArray                  *_dividerConstraints;
+    NSArray                         *_restoredConstants;
+    JWSplitViewDraggingHandler      _dragHandler;
+    CGFloat                         _dividerThickness;
+    JWSplitViewDividerStyle         _dividerStyle;
+    NSString                        *_autosaveName;
+}
+#endif
 
 //- (void)setView:(NSView *)view forSplitView:(NSUInteger)splitView;
 - (void)addSplitView:(NSView *)view;
@@ -49,5 +69,15 @@ typedef NSInteger JWSplitViewDividerStyle;
 @end
 
 @interface JWDividerView : NSView
+#if !__has_feature(objc_arc)
+{
+    NSTrackingArea              *_trackingArea;
+    JWSplitViewDividerStyle     _dividerStyle;
+    BOOL                        _horizontal;
+    NSLayoutConstraint          *_constraint;
+}
+#endif
+
 @property (nonatomic, assign, readonly) NSLayoutConstraint *constraint;
+
 @end
