@@ -25,9 +25,11 @@
 
 #if __has_feature(objc_arc)
 #define JWRELEASE(someObject)
+#define JWAUTORELEASE(someObject) someObject
 #define JWPROPERTYSTRONG strong
 #else
 #define JWRELEASE(someObject) [someObject release]
+#define JWAUTORELEASE(someObject) [someObject autorelease]
 #define JWPROPERTYSTRONG retain
 #endif
 
@@ -372,9 +374,9 @@ NSString * const JWSplitViewDidResizeNotification = @"JWSplitViewDidResizeNotifi
         self.trackingArea = nil;
     }
     
-    self.trackingArea = [[NSTrackingArea alloc] initWithRect:[self bounds]
-                                                     options:(NSTrackingMouseEnteredAndExited | NSTrackingActiveInActiveApp)
-                                                       owner:self userInfo:nil];
+    self.trackingArea = JWAUTORELEASE([[NSTrackingArea alloc] initWithRect:[self bounds]
+                                                                   options:(NSTrackingMouseEnteredAndExited | NSTrackingActiveInActiveApp)
+                                                                     owner:self userInfo:nil]);
     [self addTrackingArea:self.trackingArea];
 }
 
