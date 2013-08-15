@@ -215,16 +215,24 @@ NSString * const JWSplitViewDidResizeNotification = @"JWSplitViewDidResizeNotifi
     NSMutableDictionary *views = [@{} mutableCopy];
     NSMutableArray *constraints = [@[] mutableCopy];
     BOOL h = self.horizontal;
+    NSDictionary *metrics = NULL;
     
+    if (JWSplitViewDividerStyleThin == self.dividerStyle) {
+        metrics = [NSDictionary dictionaryWithObject:[NSNumber numberWithFloat:-floorf(_dividerThickness/2.0)] forKey:@"space"];
+    }
+    else {
+        metrics = [NSDictionary dictionaryWithObject:[NSNumber numberWithFloat:0.0] forKey:@"space"];
+    }
+
     [self.splitViews enumerateObjectsUsingBlock:^(NSView *currentView, NSUInteger idx, BOOL *stop) {
         [views setObject:currentView forKey:@"current"];
         [views setObject:[self.dividers objectAtIndex:idx] forKey:@"prevDiv"];
         [views setObject:[self.dividers objectAtIndex:idx + 1] forKey:@"nextDiv"];
         
-        [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:h ? @"H:[prevDiv][current(>=0@600)][nextDiv]" : @"V:[prevDiv][current(>=0)][nextDiv]"
-                                                                                 options:0 metrics:0 views:views]];
+        [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:h ? @"H:[prevDiv]-(space)-[current(>=0@600)]-(space)-[nextDiv]" : @"V:[prevDiv]-(space)-[current(>=0)]-(space)-[nextDiv]"
+                                                                                 options:0 metrics:metrics views:views]];
         [constraints addObjectsFromArray:[NSLayoutConstraint constraintsWithVisualFormat:h ? @"V:|[current]|" : @"H:|[current]|"
-                                                                                 options:0 metrics:0 views:views]];
+                                                                                 options:0 metrics:metrics views:views]];
     }];
     [self addConstraints:constraints];
     
@@ -387,9 +395,17 @@ NSString * const JWSplitViewDidResizeNotification = @"JWSplitViewDidResizeNotifi
     switch (self.dividerStyle) {
         case JWSplitViewDividerStyleThin: {
             CGContextSetRGBFillColor(ctx, 0.35, 0.35, 0.35, 1);
-            CGContextFillRect(ctx, CGRectMake(0, 0, self.frame.size.width / 2, self.frame.size.height));
-            CGContextSetRGBFillColor(ctx, 1, 1, 1, 1);
-            CGContextFillRect(ctx, CGRectMake(self.frame.size.width / 2, 0, self.frame.size.width / 2, self.frame.size.height));
+            CGRect deviderLine;
+            if (_horizontal)
+            {
+                deviderLine = CGRectMake(floorf(self.frame.size.width / 2.0), 0.0, 1.0, self.frame.size.height);
+            }
+            else
+            {
+                deviderLine = CGRectMake(0.0, floorf(self.frame.size.height / 2.0), self.frame.size.width, 1.0);
+            }
+            
+            CGContextFillRect(ctx, deviderLine);
         }
             break;
             
